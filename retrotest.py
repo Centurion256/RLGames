@@ -58,37 +58,39 @@ def test_agent(game_name):
 
     env = retro.make(game=game_name)
     obs = env.reset()
-    three_last_obs = [INF] * 12
+    three_last_obs = np.ndarray(shape=(3, 4), dtype='float64')
     xs, hs, dlogps, drs = [], [], [], []
     running_reward = None
     reward_sum = 0
     episode_number = 0
     new_episode = True
+
     while True:
         env.render()
 
-        # Wait for the ball to appear on the screen
         while INF in three_last_obs:
-            three_last_obs[:8] = three_last_obs[4:]
-            three_last_obs[8:] = [x / 150 for x in get_data_from_obs(obs)]
-            obs, rew, done, info = env.step(env.action_space.sample())
+            three_last_obs[0] = three_last_obs[1]
+            three_last_obs[1] = three_last_obs[2]
+            three_last_obs[2] = get_data_from_obs(obs) / 150
 
+            obs, rew, done, info = env.step(env.action_space.sample())
             env.render()
-        x = three_last_obs
+        x = three_last_obs.reshape(-1, 1)
         aprob, h = policy_forward(model, x)
         if new_episode:
-            print(aprob)
             new_episode = False
 
         action = up if np.random.uniform() < aprob else down
-        xs.append(x)
-        hs.append(h)
+        xs.append(x.flatten())
+        hs.append(h.flatten())
         y = 1 if action == up else 0
+
         dlogps.append(y - aprob)
 
         obs, rew, done, info = env.step(action)
-        three_last_obs[:8] = three_last_obs[4:]
-        three_last_obs[8:] = [x / 150 for x in get_data_from_obs(obs)]
+        three_last_obs[0] = three_last_obs[1]
+        three_last_obs[1] = three_last_obs[2]
+        three_last_obs[2] = get_data_from_obs(obs) / 150
 
         reward_sum += rew
         drs.append(rew)
@@ -115,73 +117,13 @@ def test_agent(game_name):
             new_episode = True
             if episode_number % batch_size == 0:
                 print("New episode")
-                print(aprob)
                 for k, v in model.items():
                     g = grad_buffer[k]
-                    print(g)
                     rmsprop_cache[k] = decay_rate * rmsprop_cache[k] + (1 - decay_rate) * g ** 2
                     model[k] += learning_rate * g / (np.sqrt(rmsprop_cache[k]) + 1e-5)
                     grad_buffer[k] = np.zeros_like(v)
             reward_sum = 0
             env.reset()
-
-
-# network = MLPRegressor(solver='sgd', activation='logistic', alpha=1e-5, hidden_layer_sizes=(10, 7, 2),
-#                        learning_rate_init=0.01, random_state=31)
-#
-# # Airstriker-Genesis is just a sample game, included with the library
-# env = retro.make(game=game_name)
-# obs = env.reset()
-#
-# three_last_obs = get_data_from_obs(obs) * 3
-# last_point_observations = []
-#
-# while True:
-#     # Make random moves while the ball is not visible
-#     while float('inf') in three_last_obs:
-#         three_last_obs[:8] = three_last_obs[4:]
-#         three_last_obs[8:] = get_data_from_obs(obs)
-#         obs, rew, done, info = env.step(env.action_space.sample())
-#         env.render()
-#
-#     predicted_move = network.predict([three_last_obs])[0]
-#     print(predicted_move)
-#     if random.random() < (1 - abs(predicted_move)) / 3:
-#         predicted_move = -predicted_move
-#     print(predicted_move)
-#     print('-----')
-#     obs, rew, done, info = env.step(down if predicted_move < 0 else up)
-#     obs = get_data_from_obs(obs)
-#     env.render()
-#
-#     # Update NN weights if some player won a point
-#     if rew != 0:
-#         # last_point_observations.reverse()
-#         for i in range(min(len(last_point_observations), 192)):
-#             network.partial_fit([last_point_observations[i][0]],
-#                                 [(rew * (1 if last_point_observations[i][1] > 0 else -1)) * 0.97 ** i])
-#         last_point_observations.clear()
-#         rew = 1
-#         last_point_observations = last_point_observations[192:]
-#         for i in range(len(last_point_observations)):
-#             network.partial_fit([last_point_observations[i][0]],
-#                                 [(rew * (1 if last_point_observations[i][1] > 0 else -1)) * 0.97 ** i])
-#         last_point_observations.clear()
-#
-#     if float('inf') in obs:
-#         continue
-#
-#     # Update latest observations for
-#     last_point_observations.append((three_last_obs, predicted_move))
-#     # shift three_last_obs to the left and replace the last element with new observation
-#     three_last_obs[:8] = three_last_obs[4:]
-#     three_last_obs[8:] = obs
-#
-#     if done:
-#         last_point_observations.clear()
-#         obs = env.reset()
-#         three_last_obs = get_data_from_obs(obs) * 3
-# env.close()
 
 
 H = 8  # number of hidden layer neurons
@@ -191,6 +133,7 @@ batch_size = 4
 learning_rate = 1e-2
 decay_rate = 0.99
 max_slider_pos = 100
+
 
 def pg_agent(game_name):
     model = {}
@@ -214,51 +157,30 @@ def pg_agent(game_name):
     env = retro.make(game=game_name)
     obs = env.reset()
 
-    three_last_obs = get_data_from_obs(obs) * 3
-    last_point_observations = []
 
-
-# class PongNet(torch.nn.Module):
-#     def __init__(self, H, D):
-#         super().__init__()
-#         self.H = H
-#         self.D = D
-#         self.fc1 = torch.nn.Linear(D, H)
-#         # self.fc2 = torch.nn.Sigmoid()
-#         self.output = torch.nn.Linear(H, 1)
-
-#         # input -> fc1 -> relu(fc1) -> fc2 -> sigmoid(fc2) -> output
-
-#     def forward(self, x):
-#         x = torch.nn.functional.relu(self.fc1(x))
-#         return torch.nn.functional.sigmoid(self.output(x))
-
-#     def parameters():
-
-
-def get_data_from_obs(obs) -> list:
-    slider_one_pos = float('inf')
-    slider_two_pos = float('inf')
-    ball_pos = [float('inf')] * 2
+def get_data_from_obs(obs) -> np.ndarray:
     channel = obs[34:-16, :, 0]
 
-    for j in range(len(channel)):
-        if channel[j][16] == 213:
-            slider_one_pos = min(slider_one_pos, j)
+    slider_one_pos = np.argwhere(channel[:, 16] == 213)
+    slider_two_pos = np.argwhere(channel[:, 16] == 92)
 
-    for j in range(len(channel)):
-        if channel[j][140] == 92:
-            slider_two_pos = min(slider_two_pos, j)
+    if len(slider_one_pos) == 0:
+        slider_one_pos = np.array([160])
+    else:
+        slider_one_pos = slider_one_pos[0]
 
-    # Check if slider moved down beyond the seen scope
-    slider_two_pos = min(slider_two_pos, 159)
-    slider_one_pos = min(slider_one_pos, 159)
+    if len(slider_two_pos) == 0:
+        slider_two_pos = np.array([160])
+    else:
+        slider_two_pos = slider_two_pos[0]
 
-    for i in range(len(channel)):
-        for j in range(len(channel[i])):
-            if channel[i][j] == 236:  # ball
-                ball_pos = min(ball_pos, [i, j])
-    return [slider_one_pos] + [slider_two_pos] + ball_pos
+    ball_pos = np.argwhere(channel == 236)
+    if len(ball_pos) == 0:
+        ball_pos = np.array([INF, INF])
+    else:
+        ball_pos = ball_pos[0]
+
+    return np.concatenate((slider_one_pos, slider_two_pos, ball_pos))
 
 
 def random_agent(gamename):

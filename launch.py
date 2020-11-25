@@ -45,7 +45,6 @@ if __name__ == "__main__":
 
         print(f"game={args.game}, algorithm={args.algorithm}")
         print(f"TODO: implement run")
-
     else:
 
         raise argparse.ArgumentError(f"task '{args.task}' does not exist")
