@@ -4,6 +4,7 @@ from sklearn.neural_network import MLPRegressor
 import random
 import numpy as np
 import torch
+import pickle
 
 INF = float('inf')
 
@@ -49,8 +50,14 @@ def policy_backward(model, eph, epdlogp, epx):
     return {'W1': dw1, 'W2': dw2}
 
 
+
+
+
 def test_agent(game_name):
     model = {'W1': np.random.randn(H, D) / np.sqrt(D * H), 'W2': np.random.randn(H) / np.sqrt(H)}
+    # f = open('model', 'rb')
+    # model = pickle.load(f)
+    # f.close()
 
     grad_buffer = {k: np.zeros_like(v) for k, v in
                    model.items()}
@@ -96,7 +103,12 @@ def test_agent(game_name):
         drs.append(rew)
 
         if done:
+
             episode_number += 1
+            if episode_number % 100 == 0:
+                f = open('model', 'wb')
+                pickle.dump(model, f)
+                f.close()
 
             epx = np.vstack(xs)
             eph = np.vstack(hs)
@@ -116,7 +128,7 @@ def test_agent(game_name):
 
             new_episode = True
             if episode_number % batch_size == 0:
-                print("New episode")
+                print("New episode ", episode_number)
                 for k, v in model.items():
                     g = grad_buffer[k]
                     rmsprop_cache[k] = decay_rate * rmsprop_cache[k] + (1 - decay_rate) * g ** 2
