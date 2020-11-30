@@ -98,6 +98,8 @@ def run_agent(env, verbose=False):
         agent.q = np.loadtxt('q_table_model.csv', delimiter=',')
 
     for episode_index in range(max_episodes_to_run):
+        if episode_index % 1000 == 0:
+            np.savetxt('q_table_model.csv', agent.q, delimiter=',')
         print(episode_index)
         observation = get_data_from_obs(env.reset())
         action = agent.begin_episode(observation)
@@ -119,25 +121,12 @@ def run_agent(env, verbose=False):
 
     print("Average score: ", total_time / max_episodes_to_run)
     np.savetxt('q_table_model.csv', agent.q, delimiter=',')
-    print("Goal not reached after {} episodes.".format(max_episodes_to_run))
-    # return episode_history
-
-
-def save_history(history, experiment_dir):
-    # Save the episode lengths to CSV.
-    filename = os.path.join(experiment_dir, "episode_history.csv")
-    dataframe = pd.DataFrame(history.lengths, columns=["length"])
-    dataframe.to_csv(filename, header=True, index_label="episode")
 
 
 def q_table_agent(game_name):
-    random_state = 31
-    experiment_dir = "pong-qlearning-1"
-
     env = retro.make(game=game_name)
 
-    episode_history = run_agent(env, verbose=True)
-    save_history(episode_history, experiment_dir)
+    run_agent(env, verbose=True)
     env.monitor.close()
 
 

@@ -3,6 +3,7 @@ import retro
 from utils import get_data_from_obs, sigmoid
 import pickle
 import torch
+import os
 
 INF = float('inf')
 
@@ -41,9 +42,11 @@ def policy_backward(model, eph, epdlogp, epx):
 
 def test_agent(game_name):
     model = {'W1': np.random.randn(H, D) / np.sqrt(D * H), 'W2': np.random.randn(H) / np.sqrt(H)}
-    # f = open('model', 'rb')
-    # model = pickle.load(f)
-    # f.close()
+    if os.path.exists('pg_model.pkl'):
+        print("model loaded from file")
+        f = open('pg_model.pkl', 'rb')
+        model = pickle.load(f)
+        f.close()
 
     grad_buffer = {k: np.zeros_like(v) for k, v in
                    model.items()}
@@ -57,16 +60,17 @@ def test_agent(game_name):
     reward_sum = 0
     episode_number = 0
     new_episode = True
+    rounds_won = 0
 
     while True:
-        env.render()
+        # env.render()
 
         while INF in three_last_obs:
             three_last_obs[0] = three_last_obs[1]
             three_last_obs[1] = get_data_from_obs(obs) / 150
 
             obs, rew, done, info = env.step(env.action_space.sample())
-            env.render()
+            # env.render()
         x = three_last_obs.reshape(-1, 1)
         aprob, h = policy_forward(model, x)
         if new_episode:
@@ -80,6 +84,9 @@ def test_agent(game_name):
         dlogps.append(y - aprob)
 
         obs, rew, done, info = env.step(action)
+        if rew == 1:
+            rounds_won += 1
+
         three_last_obs[0] = three_last_obs[1]
         three_last_obs[1] = get_data_from_obs(obs) / 150
 
@@ -87,12 +94,15 @@ def test_agent(game_name):
         drs.append(rew)
 
         if done:
+            if episode_number % 50 == 0:
+                print("Rounrds won: ", rounds_won)
+                rounds_won = 0
 
             episode_number += 1
-            # if episode_number % 100 == 0:
-            #     f = open('model', 'wb')
-            #     pickle.dump(model, f)
-            #     f.close()
+            if episode_number % 100 == 0:
+                f = open('pg_model.pkl', 'wb')
+                pickle.dump(model, f)
+                f.close()
 
             epx = np.vstack(xs)
             eph = np.vstack(hs)
@@ -128,7 +138,3 @@ discount = 0.99
 batch_size = 5
 learning_rate = 1e-2
 decay_rate = 0.99
-max_slider_pos = 100
-
-
-
