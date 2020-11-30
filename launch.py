@@ -1,6 +1,4 @@
-import os
 import argparse
-import runpy
 import retro
 from retro.examples.interactive import RetroInteractive
 import retrotest
@@ -46,5 +44,4 @@ if __name__ == "__main__":
         print(f"game={args.game}, algorithm={args.algorithm}")
         print(f"TODO: implement run")
     else:
-
         raise argparse.ArgumentError(f"task '{args.task}' does not exist")
