@@ -1,7 +1,7 @@
 import retro
 import sys
-from q_table_agent import q_table_agent
-from policy_gradient import test_agent
+from q_table_agent import q_table_agent#, q_table_agent_play
+from policy_gradient import test_agent, test_agent_play
 
 INF = float('inf')
 
@@ -48,6 +48,19 @@ def train(game, algorithm, save=None):
 
         raise NameError(f"No such algorithm: {algorithm}")
 
+def run(game, algorithm, model):
+    
+    if algorithm == "random":
+        
+        random_agent(algorithm)
+
+    elif algorithm == "test":
+        
+        test_agent_play(game, model)
+
+    # elif algorithm == "q_table":
+        
+    #     q_table_agent_play(game, model)
 
 if __name__ == "__main__":
     # print(retro.data.list_games())

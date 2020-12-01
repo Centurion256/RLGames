@@ -2,8 +2,8 @@ import numpy as np
 import retro
 from utils import get_data_from_obs, sigmoid
 import pickle
-import torch
 import os
+import time
 
 INF = float('inf')
 
@@ -39,6 +39,53 @@ def policy_backward(model, eph, epdlogp, epx):
     dw1 = np.dot(dh.T, epx)
     return {'W1': dw1, 'W2': dw2}
 
+def test_agent_play(game_name, model):
+    
+    if os.path.exists(model):
+        print("model loaded from file")
+        f = open(model, 'rb')
+        model = pickle.load(f)
+        f.close()
+        
+    env = retro.make(game=game_name)
+    obs = env.reset()
+    three_last_obs = np.ndarray(shape=(2, 3), dtype='float64')
+    actions = [down, up]
+    
+    new_episode = True
+
+    while True:
+        env.render()
+
+        while INF in three_last_obs:
+            # print(f"Infinity: {three_last_obs}")
+            three_last_obs[0] = three_last_obs[1]
+            three_last_obs[1] = get_data_from_obs(obs) / 160
+
+            obs, rew, done, info = env.step(env.action_space.sample())
+            env.render()
+            time.sleep(0.01)
+
+        x = three_last_obs.reshape(-1, 1)
+        aprob, h = policy_forward(model, x)
+        action = np.around(aprob).astype(int)[0] #always take the best possible action
+        
+        print(f"Probability: {aprob}; action: {action}; last_obs: {three_last_obs[1]}")
+        if new_episode:
+            new_episode = False
+            # print(f"Probability: {aprob}; action: {action}")
+        
+        obs, rew, done, info = env.step(actions[action])
+        
+        three_last_obs[0] = three_last_obs[1]
+        three_last_obs[1] = get_data_from_obs(obs) / 160
+    
+        if done:
+            env.reset()
+            new_episode = True
+        
+        time.sleep(0.01)
+        
 
 def test_agent(game_name):
     model = {'W1': np.random.randn(H, D) / np.sqrt(D * H), 'W2': np.random.randn(H) / np.sqrt(H)}
@@ -59,7 +106,6 @@ def test_agent(game_name):
     running_reward = None
     reward_sum = 0
     episode_number = 0
-    new_episode = True
     rounds_won = 0
 
     while True:
@@ -67,15 +113,13 @@ def test_agent(game_name):
 
         while INF in three_last_obs:
             three_last_obs[0] = three_last_obs[1]
-            three_last_obs[1] = get_data_from_obs(obs) / 150
+            three_last_obs[1] = get_data_from_obs(obs) / 160
 
             obs, rew, done, info = env.step(env.action_space.sample())
             # env.render()
         x = three_last_obs.reshape(-1, 1)
         aprob, h = policy_forward(model, x)
-        if new_episode:
-            new_episode = False
-
+        
         action = up if np.random.uniform() < aprob else down
         xs.append(x.flatten())
         hs.append(h.flatten())
@@ -84,18 +128,19 @@ def test_agent(game_name):
         dlogps.append(y - aprob)
 
         obs, rew, done, info = env.step(action)
-        if rew == 1:
-            rounds_won += 1
+        if rew != 0:
+            rounds_won += rew
+            drs.append(rew)
 
         three_last_obs[0] = three_last_obs[1]
-        three_last_obs[1] = get_data_from_obs(obs) / 150
+        three_last_obs[1] = get_data_from_obs(obs) / 160
 
         reward_sum += rew
-        drs.append(rew)
+        # drs.append(rew)
 
         if done:
             if episode_number % 50 == 0:
-                print("Rounrds won: ", rounds_won)
+                print(f"Episode {episode_number}; Rounds won: ", rounds_won)
                 rounds_won = 0
 
             episode_number += 1
@@ -120,7 +165,6 @@ def test_agent(game_name):
             for k in model:
                 grad_buffer[k] += grad[k]
 
-            new_episode = True
             if episode_number % batch_size == 0:
                 print("New episode ", episode_number)
                 for k, v in model.items():
@@ -136,5 +180,5 @@ H = 8  # number of hidden layer neurons
 D = 3 * 2  # input dimension
 discount = 0.99
 batch_size = 5
-learning_rate = 1e-2
+learning_rate = 5e-2
 decay_rate = 0.99

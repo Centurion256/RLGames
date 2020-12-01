@@ -42,6 +42,7 @@ if __name__ == "__main__":
     elif args.task == "run":  # run an existing pre-trained agent
 
         print(f"game={args.game}, algorithm={args.algorithm}")
-        print(f"TODO: implement run")
+        retrotest.run(game=args.game, algorithm=args.algorithm, model='pg_model.pkl')
+        
     else:
         raise argparse.ArgumentError(f"task '{args.task}' does not exist")
