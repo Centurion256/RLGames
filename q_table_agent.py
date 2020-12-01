@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from utils import get_data_from_obs
 import time
+import keyboard
 
 
 class PongQLearningAgent:
@@ -167,7 +168,20 @@ def run_q_table():
                 break
 
 
-def play_against_q_table():
+global_action = -1
+
+
+def change_global(value):
+    global global_action
+    global_action = value
+
+
+keyboard.add_hotkey('w', change_global, args=(1,))
+keyboard.add_hotkey('s', change_global, args=(0,))
+
+
+def play_against_q_table(random=False):
+    global global_action
     left_up = 6
     left_down = 7
     right_up = 4
@@ -182,13 +196,13 @@ def play_against_q_table():
         exploration_rate=0,
         exploration_decay_rate=0.985,
     )
-    if os.path.exists('q_table_model_new.csv'):
-        print('Model loading from file...')
-        agent.q = np.loadtxt('q_table_model_new.csv', delimiter=',')
-        print('Model have loaded already...')
-    else:
-        print("No model found")
-        return
+    # if os.path.exists('q_table_model_new.csv'):
+    #     print('Model loading from file...')
+    #     agent.q = np.loadtxt('q_table_model_new.csv', delimiter=',')
+    #     print('Model have loaded already...')
+    # else:
+    #     print("No model found")
+    #     return
 
     while True:
         observation = get_data_from_obs(env.reset())
@@ -197,20 +211,22 @@ def play_against_q_table():
         while True:
             # Perform the action and observe the new stat
             new_action = zero_action.copy()
-            left = int(np.random.uniform(0, 1) + 0.5)
-            if left == 0:
-                new_action[left_up] = 1
+            if random:
+                left = int(np.random.uniform(0, 1) + 0.5)
             else:
+                left = global_action
+                global_action = -1
+            if left == 1:
+                new_action[left_up] = 1
+            elif left == 0:
                 new_action[left_down] = 1
 
-            print(action)
             if action == 1:
                 new_action[right_up] = 1
             else:
                 new_action[right_down] = 1
 
             observation, reward, done, info = env.step(new_action)
-            print(info)
 
             # Update the display and log the current state.
             env.render()
