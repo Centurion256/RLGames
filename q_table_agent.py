@@ -84,22 +84,23 @@ def log_timestep(index, action, reward, observation):
 
 
 def run_agent(env, verbose=False):
-    max_episodes_to_run = 40
+    max_episodes_to_run = 20000
     total_time = 0
 
     agent = PongQLearningAgent(
-        learning_rate=0.09,
-        discount_factor=0.92,
-        exploration_rate=0.9,
-        exploration_decay_rate=0.95
+        learning_rate=0.01,
+        discount_factor=0.99,
+        exploration_rate=0,
+        exploration_decay_rate=0.985,
     )
-    if os.path.exists('q_table_model.csv'):
-        print('Model loaded from file')
-        agent.q = np.loadtxt('q_table_model.csv', delimiter=',')
+    # if os.path.exists('q_table_model_new.csv'):
+    #     print('Model loading from file...')
+    #     agent.q = np.loadtxt('q_table_model_new.csv', delimiter=',')
+    #     print('Model have loaded already...')
 
-    for episode_index in range(max_episodes_to_run):
-        if episode_index % 1000 == 0:
-            np.savetxt('q_table_model.csv', agent.q, delimiter=',')
+    for episode_index in range(1, max_episodes_to_run):
+        # if episode_index % 1000 == 0:
+        # np.savetxt('q_table_model_new.csv', agent.q, delimiter=',')
         print(episode_index)
         observation = get_data_from_obs(env.reset())
         action = agent.begin_episode(observation)
@@ -120,15 +121,109 @@ def run_agent(env, verbose=False):
                 break
 
     print("Average score: ", total_time / max_episodes_to_run)
-    np.savetxt('q_table_model.csv', agent.q, delimiter=',')
 
 
 def q_table_agent(game_name):
     env = retro.make(game=game_name)
-
     run_agent(env, verbose=True)
-    env.monitor.close()
+
+
+def run_q_table():
+    env = retro.make(game='Pong-Atari2600')
+    max_episodes_to_run = 20000
+
+    agent = PongQLearningAgent(
+        learning_rate=0.00,
+        discount_factor=0.99,
+        exploration_rate=0,
+        exploration_decay_rate=0.985,
+    )
+    if os.path.exists('q_table_model_new.csv'):
+        print('Model loading from file...')
+        agent.q = np.loadtxt('q_table_model_new.csv', delimiter=',')
+        print('Model have loaded already...')
+    else:
+        print("No model found")
+        return
+
+    for episode_index in range(1, max_episodes_to_run):
+        print("Episode: ", episode_index)
+        observation = get_data_from_obs(env.reset())
+        action = agent.begin_episode(observation)
+
+        while True:
+            # Perform the action and observe the new state.
+            observation, reward, done, info = env.step(get_action(action))
+
+            # Update the display and log the current state.
+            env.render()
+
+            # Get the next action from the agent, given our new state.
+            action = agent.act(get_data_from_obs(observation), reward)
+            time.sleep(0.02)
+
+            # Record this episode to the history and check if the goal has been reached.
+            if done:
+                break
+
+
+def play_against_q_table():
+    left_up = 6
+    left_down = 7
+    right_up = 4
+    right_down = 5
+    zero_action = [1] + [0] * 14 + [1]
+
+    env = retro.make(game='Pong-Atari2600', players=2)
+
+    agent = PongQLearningAgent(
+        learning_rate=0.00,
+        discount_factor=0.99,
+        exploration_rate=0,
+        exploration_decay_rate=0.985,
+    )
+    if os.path.exists('q_table_model_new.csv'):
+        print('Model loading from file...')
+        agent.q = np.loadtxt('q_table_model_new.csv', delimiter=',')
+        print('Model have loaded already...')
+    else:
+        print("No model found")
+        return
+
+    while True:
+        observation = get_data_from_obs(env.reset())
+        action = agent.begin_episode(observation)
+
+        while True:
+            # Perform the action and observe the new stat
+            new_action = zero_action.copy()
+            left = int(np.random.uniform(0, 1) + 0.5)
+            if left == 0:
+                new_action[left_up] = 1
+            else:
+                new_action[left_down] = 1
+
+            print(action)
+            if action == 1:
+                new_action[right_up] = 1
+            else:
+                new_action[right_down] = 1
+
+            observation, reward, done, info = env.step(new_action)
+            print(info)
+
+            # Update the display and log the current state.
+            env.render()
+
+            # Get the next action from the agent, given our new state.
+            action = agent.act(get_data_from_obs(observation), reward[1])
+            time.sleep(0.02)
+
+            # Record this episode to the history and check if the goal has been reached.
+            if done:
+                break
 
 
 if __name__ == "__main__":
-    q_table_agent('Pong-Atari2600')
+    # q_table_agent('Pong-Atari2600')
+    play_against_q_table()

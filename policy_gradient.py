@@ -39,19 +39,19 @@ def policy_backward(model, eph, epdlogp, epx):
     dw1 = np.dot(dh.T, epx)
     return {'W1': dw1, 'W2': dw2}
 
+
 def test_agent_play(game_name, model):
-    
     if os.path.exists(model):
         print("model loaded from file")
         f = open(model, 'rb')
         model = pickle.load(f)
         f.close()
-        
+
     env = retro.make(game=game_name)
     obs = env.reset()
     three_last_obs = np.ndarray(shape=(2, 3), dtype='float64')
     actions = [down, up]
-    
+
     new_episode = True
 
     while True:
@@ -68,24 +68,24 @@ def test_agent_play(game_name, model):
 
         x = three_last_obs.reshape(-1, 1)
         aprob, h = policy_forward(model, x)
-        action = np.around(aprob).astype(int)[0] #always take the best possible action
-        
+        action = np.around(aprob).astype(int)[0]  # always take the best possible action
+
         print(f"Probability: {aprob}; action: {action}; last_obs: {three_last_obs[1]}")
         if new_episode:
             new_episode = False
             # print(f"Probability: {aprob}; action: {action}")
-        
+
         obs, rew, done, info = env.step(actions[action])
-        
+
         three_last_obs[0] = three_last_obs[1]
         three_last_obs[1] = get_data_from_obs(obs) / 160
-    
+
         if done:
             env.reset()
             new_episode = True
-        
+
         time.sleep(0.01)
-        
+
 
 def test_agent(game_name):
     model = {'W1': np.random.randn(H, D) / np.sqrt(D * H), 'W2': np.random.randn(H) / np.sqrt(H)}
@@ -119,7 +119,7 @@ def test_agent(game_name):
             # env.render()
         x = three_last_obs.reshape(-1, 1)
         aprob, h = policy_forward(model, x)
-        
+
         action = up if np.random.uniform() < aprob else down
         xs.append(x.flatten())
         hs.append(h.flatten())
