@@ -1,6 +1,6 @@
 import numpy as np
 import retro
-from utils import get_data_from_obs, sigmoid
+from utils import sigmoid
 import pickle
 import os
 import time
@@ -10,15 +10,34 @@ INF = float('inf')
 up = [1, 0, 0, 0, 1, 0, 0, 0]
 down = [1, 0, 0, 0, 0, 1, 0, 0]
 
+H = 200
+batch_size = 10
+learning_rate = 1e-4
+gamma = 0.99
+decay_rate = 0.99
+resume = False
+render = False
+
+D = 80 * 80
+
+
+def prepro(i):
+    """ prepro 210x160x3 uint8 frame into 6400 (80x80) 1D float vector """
+    i = i[35:195]  # crop
+    i = i[::2, ::2, 0]  # downsample by factor of 2
+    i[i == 144] = 0  # erase background (background type 1)
+    i[i == 109] = 0  # erase background (background type 2)
+    i[i != 0] = 1  # everything else (paddles, ball) just set to 1
+    return i.astype(np.float).ravel()
+
 
 def discount_rewards(r):
     """ take 1D float array of rewards and compute discounted reward """
     discounted_r = np.zeros_like(r)
     running_add = 0
     for t in reversed(range(0, r.size)):
-        if r[t] != 0:
-            running_add = 0
-        running_add = running_add * discount + r[t]
+        if r[t] != 0: running_add = 0  # reset the sum, since this was a game boundary (pong specific!)
+        running_add = running_add * gamma + r[t]
         discounted_r[t] = running_add
     return discounted_r
 
@@ -41,50 +60,7 @@ def policy_backward(model, eph, epdlogp, epx):
 
 
 def test_agent_play(game_name, model):
-    if os.path.exists(model):
-        print("model loaded from file")
-        f = open(model, 'rb')
-        model = pickle.load(f)
-        f.close()
-
-    env = retro.make(game=game_name)
-    obs = env.reset()
-    three_last_obs = np.ndarray(shape=(2, 3), dtype='float64')
-    actions = [down, up]
-
-    new_episode = True
-
-    while True:
-        env.render()
-
-        while INF in three_last_obs:
-            # print(f"Infinity: {three_last_obs}")
-            three_last_obs[0] = three_last_obs[1]
-            three_last_obs[1] = get_data_from_obs(obs) / 160
-
-            obs, rew, done, info = env.step(env.action_space.sample())
-            env.render()
-            time.sleep(0.01)
-
-        x = three_last_obs.reshape(-1, 1)
-        aprob, h = policy_forward(model, x)
-        action = np.around(aprob).astype(int)[0]  # always take the best possible action
-
-        print(f"Probability: {aprob}; action: {action}; last_obs: {three_last_obs[1]}")
-        if new_episode:
-            new_episode = False
-            # print(f"Probability: {aprob}; action: {action}")
-
-        obs, rew, done, info = env.step(actions[action])
-
-        three_last_obs[0] = three_last_obs[1]
-        three_last_obs[1] = get_data_from_obs(obs) / 160
-
-        if done:
-            env.reset()
-            new_episode = True
-
-        time.sleep(0.01)
+    pass
 
 
 def test_agent(game_name):
@@ -95,13 +71,12 @@ def test_agent(game_name):
         model = pickle.load(f)
         f.close()
 
-    grad_buffer = {k: np.zeros_like(v) for k, v in
-                   model.items()}
+    grad_buffer = {k: np.zeros_like(v) for k, v in model.items()}
     rmsprop_cache = {k: np.zeros_like(v) for k, v in model.items()}
 
-    env = retro.make(game=game_name)
-    obs = env.reset()
-    three_last_obs = np.ndarray(shape=(2, 3), dtype='float64')
+    env = retro.make(game="Pong-Atari2600")
+    observation = env.reset()
+    prev_x = None
     xs, hs, dlogps, drs = [], [], [], []
     running_reward = None
     reward_sum = 0
@@ -110,14 +85,10 @@ def test_agent(game_name):
 
     while True:
         # env.render()
+        cur_x = prepro(observation)
+        x = cur_x - prev_x if prev_x is not None else np.zeros(D)
+        prev_x = cur_x
 
-        while INF in three_last_obs:
-            three_last_obs[0] = three_last_obs[1]
-            three_last_obs[1] = get_data_from_obs(obs) / 160
-
-            obs, rew, done, info = env.step(env.action_space.sample())
-            # env.render()
-        x = three_last_obs.reshape(-1, 1)
         aprob, h = policy_forward(model, x)
 
         action = up if np.random.uniform() < aprob else down
@@ -127,16 +98,10 @@ def test_agent(game_name):
 
         dlogps.append(y - aprob)
 
-        obs, rew, done, info = env.step(action)
-        if rew != 0:
-            rounds_won += rew
-            drs.append(rew)
-
-        three_last_obs[0] = three_last_obs[1]
-        three_last_obs[1] = get_data_from_obs(obs) / 160
+        observation, rew, done, info = env.step(action)
 
         reward_sum += rew
-        # drs.append(rew)
+        drs.append(rew)
 
         if done:
             if episode_number % 50 == 0:
@@ -156,11 +121,10 @@ def test_agent(game_name):
             xs, hs, dlogps, drs = [], [], [], []  # reset array memory
 
             discounted_epr = discount_rewards(epr)
-            # standardize the rewards to be unit normal (helps control the gradient estimator variance)
             discounted_epr -= np.mean(discounted_epr)
             discounted_epr /= np.std(discounted_epr)
 
-            epdlogp *= discounted_epr  # modulate the gradient with advantage (PG magic happens right here.)
+            epdlogp *= discounted_epr
             grad = policy_backward(model, eph, epdlogp, epx)
             for k in model:
                 grad_buffer[k] += grad[k]
@@ -172,13 +136,8 @@ def test_agent(game_name):
                     rmsprop_cache[k] = decay_rate * rmsprop_cache[k] + (1 - decay_rate) * g ** 2
                     model[k] += learning_rate * g / (np.sqrt(rmsprop_cache[k]) + 1e-5)
                     grad_buffer[k] = np.zeros_like(v)
+            running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
+            print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
             reward_sum = 0
-            env.reset()
-
-
-H = 8  # number of hidden layer neurons
-D = 3 * 2  # input dimension
-discount = 0.99
-batch_size = 5
-learning_rate = 5e-2
-decay_rate = 0.99
+            observation = env.reset()
+            prev_x = None

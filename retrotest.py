@@ -2,6 +2,7 @@ import retro
 import sys
 from q_table_agent import q_table_agent, run_q_table
 from policy_gradient import test_agent, test_agent_play
+from dqn_agent import dqn_run
 
 INF = float('inf')
 
@@ -43,6 +44,9 @@ def train(game, algorithm, save=None):
         return 0
     elif algorithm == 'q_table':
         q_table_agent(game)
+
+    elif algorithm == 'dqn':
+        dqn_run(game)
 
     else:  # invalid algorithm
 
