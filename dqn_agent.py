@@ -96,7 +96,7 @@ def q_iteration(env, model, state, memory, prev_state):
     if random.random() < epsilon:
         action = [1, 0] if random.random() < 0.5 else [0, 1]
     else:
-        action = get_action_from_output(model.predict([[[prev_state, state]], [np.ones((2,))]]))
+        action = get_action_from_output(model.predict([np.asarray([[prev_state, state]]), np.ones((1, 2))])[0])
         action = [1, 0] if action[0] > action[1] else [0, 1]
 
     # Play one game iteration (note: according to the next paper, you should actually play 4 times here)
@@ -188,6 +188,5 @@ def dqn_run(game_name):
         obs, is_done = q_iteration(env, model, obs, memory, prev_obs)
         prev_obs = obs_tmp
         if is_done:
-            break
             obs = preprop(env.reset())
         env.render()
